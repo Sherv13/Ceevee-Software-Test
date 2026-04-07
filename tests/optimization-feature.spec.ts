@@ -17,6 +17,16 @@ async function login(page: Page) {
 
 test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
   test.describe('Public requirements validation on docs', () => {
+    test('documents the step-by-step optimization workflow', async ({ page }) => {
+      await page.goto('/docs');
+
+      await expect(page.getByRole('heading', { name: /step-by-step/i })).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /navigate to new optimization/i }).first()).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /enter the target role/i }).first()).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /select an ai model/i }).first()).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /click optimize/i }).first()).toBeVisible();
+    });
+
     test('documents JD URL import as a first-class optimization path', async ({ page }) => {
       await page.goto('/docs');
 
@@ -40,6 +50,38 @@ test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
 
       await expect(page.getByRole('heading', { name: /re-optimizing/i })).toBeVisible();
       await expect(page.getByText(/counts toward your monthly quota/i)).toBeVisible();
+    });
+
+    test('documents ATS scoring categories used to evaluate optimization output', async ({ page }) => {
+      await page.goto('/docs');
+
+      await expect(page.getByRole('heading', { name: /score breakdown/i })).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /keyword match/i }).first()).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /skills section/i }).first()).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /experience relevance/i }).first()).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /format & structure/i }).first()).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /action verbs/i }).first()).toBeVisible();
+      await expect(page.locator('li').filter({ hasText: /job title alignment/i }).first()).toBeVisible();
+    });
+
+    test('documents export formats for optimized resume artifacts', async ({ page }) => {
+      await page.goto('/docs');
+
+      await expect(page.getByRole('heading', { name: /available formats/i })).toBeVisible();
+      await expect(page.getByText(/pdf/i).first()).toBeVisible();
+      await expect(page.getByText(/docx/i).first()).toBeVisible();
+      await expect(page.getByText(/markdown/i).first()).toBeVisible();
+      await expect(page.getByText(/cover letter pdf/i)).toBeVisible();
+    });
+
+    test('documents model-tier availability for optimization', async ({ page }) => {
+      await page.goto('/docs');
+
+      await expect(page.getByRole('heading', { name: /ai models/i })).toBeVisible();
+      await expect(page.getByText(/haiku/i).first()).toBeVisible();
+      await expect(page.getByText(/sonnet/i).first()).toBeVisible();
+      await expect(page.getByText(/opus/i).first()).toBeVisible();
+      await expect(page.getByText(/when optimizing or re-optimizing/i)).toBeVisible();
     });
   });
 
@@ -79,6 +121,14 @@ test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
 
       await page.getByRole('button', { name: /^optimize$/i }).click();
       await expect(page).toHaveURL(/optimi|editor|resume/i);
+    });
+
+    test('exposes AI model selection in optimization form before submit', async ({ page }) => {
+      await login(page);
+      await page.goto('/dashboard');
+
+      await page.getByRole('link', { name: /new optimization/i }).click();
+      await expect(page.getByLabel(/ai model|model/i)).toBeVisible();
     });
 
     test('shows post-optimization analytics surfaces in editor', async ({ page }) => {
