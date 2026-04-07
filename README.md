@@ -31,7 +31,7 @@ npm run report
 ## Optional Live E2E
 To run authenticated tests, create .env from .env.example and set:
 - CVAI_BASE_URL (default: https://cv-ai.work)
-- CVAI_EMAIL
+- CVAI_USERNAME
 - CVAI_PASSWORD
 - CVAI_TEST_JOB_URL
 
