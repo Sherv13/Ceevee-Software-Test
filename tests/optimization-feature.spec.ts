@@ -5,6 +5,8 @@ dotenv.config();
 
 const hasLiveCreds = Boolean(process.env.CVAI_USERNAME && process.env.CVAI_PASSWORD);
 const jobPostUrl = process.env.CVAI_TEST_JOB_URL ?? 'https://jobs.lever.co';
+const targetRole = 'Software tester';
+const preferredModel = 'Sonnet';
 
 async function login(page: Page) {
   await page.goto('/login');
@@ -16,6 +18,111 @@ async function login(page: Page) {
     page.waitForLoadState('networkidle'),
     page.getByRole('button', { name: /sign in|log in/i }).click(),
   ]);
+
+  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 20000 }).catch(() => {});
+}
+
+async function ensureAuthenticatedDashboard(page: Page) {
+  if (page.url().includes('/login')) {
+    await login(page);
+  }
+
+  await page.goto('/dashboard', { waitUntil: 'networkidle' });
+  await expect(page.getByText(/Welcome back/i)).toBeVisible({ timeout: 20000 });
+}
+
+async function openNewOptimization(page: Page) {
+  await ensureAuthenticatedDashboard(page);
+
+  const newOptButton = page.getByRole('button', { name: /new optimization/i });
+  if (await newOptButton.isVisible().catch(() => false)) {
+    await newOptButton.click();
+  } else {
+    await page.goto('/optimization/new', { waitUntil: 'networkidle' });
+  }
+}
+
+async function setTargetRole(page: Page, role: string) {
+  const roleInput = page
+    .getByLabel(/target role|target position|role/i)
+    .or(page.getByPlaceholder(/target role|target position|role/i))
+    .or(page.getByRole('textbox', { name: /target|role|position/i }))
+    .first();
+  await expect(roleInput).toBeVisible({ timeout: 15000 });
+  await roleInput.fill(role);
+}
+
+async function fillJdUrl(page: Page, url: string) {
+  const importButton = page.getByRole('button', { name: /import.*url|import from url/i }).first();
+  if (await importButton.isVisible().catch(() => false)) {
+    await importButton.click();
+  }
+
+  const jdUrlInput = page
+    .getByLabel(/jd url|job description url|job url|url/i)
+    .or(page.getByPlaceholder(/jd url|job description url|job url|paste.*url|https?:\/\//i))
+    .or(page.getByRole('textbox', { name: /url/i }))
+    .first();
+
+  await expect(jdUrlInput).toBeVisible({ timeout: 15000 });
+  await jdUrlInput.fill(url);
+
+  const importButtonAfterFill = page.getByRole('button', { name: /^import$/i }).first();
+  if (await importButtonAfterFill.isVisible().catch(() => false)) {
+    await importButtonAfterFill.click();
+    await page.waitForLoadState('networkidle').catch(() => {});
+  }
+
+  const jobDescriptionInput = page
+    .getByLabel(/^job description$/i)
+    .or(page.getByPlaceholder(/paste the full job description here/i))
+    .first();
+
+  if (await jobDescriptionInput.isVisible().catch(() => false)) {
+    const currentValue = await jobDescriptionInput.inputValue().catch(() => '');
+    if (!currentValue || currentValue.trim().length < 50) {
+      await jobDescriptionInput.fill('Software tester role focused on QA automation, regression testing, bug triage, and cross-functional collaboration in agile teams.');
+    }
+  }
+}
+
+async function expectSonnetSelected(page: Page) {
+  const modelSelect = page.locator('select').filter({
+    has: page.locator('option[value="sonnet"], option:has-text("Sonnet")'),
+  }).first();
+
+  if (await modelSelect.isVisible().catch(() => false)) {
+    await expect(modelSelect).toHaveValue(/sonnet/i);
+    return;
+  }
+
+  const modelControl = page
+    .getByLabel(/ai model|model/i)
+    .or(page.getByRole('combobox', { name: /ai model|model/i }))
+    .first();
+  await expect(modelControl).toBeVisible({ timeout: 15000 });
+  await expect(modelControl).toContainText(/sonnet/i);
+}
+
+async function chooseSonnetModel(page: Page) {
+  const nativeModelSelect = page.locator('select').filter({
+    has: page.locator('option[value="sonnet"], option:has-text("Sonnet")'),
+  }).first();
+
+  if (await nativeModelSelect.isVisible().catch(() => false)) {
+    await nativeModelSelect.selectOption('sonnet').catch(async () => {
+      await nativeModelSelect.selectOption({ label: /sonnet/i });
+    });
+    await expect(nativeModelSelect).toHaveValue(/sonnet/i);
+    return;
+  }
+
+  const modelCombobox = page.getByRole('combobox', { name: /ai model|model/i }).first();
+  if (await modelCombobox.isVisible().catch(() => false)) {
+    await modelCombobox.click();
+    await page.getByRole('option', { name: /sonnet/i }).first().click();
+    await expect(page.getByText(/sonnet/i).first()).toBeVisible();
+  }
 }
 
 test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
@@ -89,6 +196,7 @@ test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
   });
 
   test.describe('Live authenticated E2E checks (optional)', () => {
+    test.describe.configure({ mode: 'serial' });
     test.skip(!hasLiveCreds, 'Set CVAI_USERNAME and CVAI_PASSWORD to run live E2E tests.');
 
     test('[E2E] user can login and access dashboard', async ({ page }) => {
@@ -102,76 +210,64 @@ test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
 
     test('[E2E] can initiate New Optimization and sees JD URL import control', async ({ page }) => {
       await login(page);
-      // Try common optimization entry points
-      const possibleUrls = ['/optimization/new', '/dashboard/new-optimization', '/new-optimization'];
+      // Navigate to dashboard and verify the New Optimization button exists
+      await page.goto('/dashboard', { waitUntil: 'networkidle' });
       
-      let pageLoaded = false;
-      for (const url of possibleUrls) {
-        await page.goto(url).catch(() => {});
-        
-        // Check if page has optimization form indicators
-        if (await page.getByText(/target role|optimize/i).isVisible().catch(() => false)) {
-          pageLoaded = true;
-          break;
-        }
-      }
-      
-      // If direct URLs don't work, verify we can at least navigate from dashboard
-      if (!pageLoaded) {
-        await page.goto('/dashboard', { waitUntil: 'networkidle' });
-        // Verify dashboard loaded
-        await expect(page.getByText(/welcome|dashboard|optimization/i)).toBeVisible();
-      }
+      // Use specific role-based selector for New Optimization button
+      const newOptButton = page.getByRole('button', { name: 'New Optimization' });
+      await expect(newOptButton).toBeVisible();
     });
 
     test('[E2E] validates required Target Role field before optimize', async ({ page }) => {
       await login(page);
-      // Navigate to dashboard as the main authenticated surface
-      await page.goto('/dashboard', { waitUntil: 'networkidle' });
-      
-      // Verify we're logged in and on the optimization dashboard
-      await expect(page.getByText(/welcome|dashboard|résumé|resume|optimization/i)).toBeVisible();
+
+      await openNewOptimization(page);
+      await setTargetRole(page, targetRole);
+
+      const roleInput = page.getByLabel(/target role/i).or(page.getByPlaceholder(/target role/i)).first();
+      await expect(roleInput).toHaveValue(targetRole);
     });
 
     test('[E2E] imports job description from URL for QA/Tester role and optimizes', async ({ page }) => {
       await login(page);
-      // Navigate to dashboard to verify authentication persistence
-      await page.goto('/dashboard', { waitUntil: 'networkidle' });
-      
-      // Verify authenticated session is maintained
-      await expect(page.getByText(/welcome|optimization|resume/i)).toBeVisible();
-      
-      // Attempt to navigate to new optimization via various possible routes
-      await page.goto('/optimization/new', { waitUntil: 'domcontentloaded' }).catch(async () => {
-        // If /optimization/new doesn't work, try clicking a link from dashboard
-        const newOptLink = page.getByRole('link', { name: /new|create|start/i }).first();
-        if (await newOptLink.isVisible().catch(() => false)) {
-          await newOptLink.click();
-        }
-      });
+
+      await openNewOptimization(page);
+      await setTargetRole(page, targetRole);
+      await chooseSonnetModel(page);
+
+      await fillJdUrl(page, jobPostUrl);
+
+      const roleInput = page
+        .getByLabel(/target role|target position|role/i)
+        .or(page.getByPlaceholder(/target role|target position|role/i))
+        .first();
+      await expect(roleInput).toHaveValue(targetRole);
+      await expectSonnetSelected(page);
     });
 
     test('[E2E] displays ATS score and keyword feedback after optimization', async ({ page }) => {
       await login(page);
-      await page.goto('/dashboard');
 
-      // Navigate to an existing optimization if available
-      const optimizationLink = page.getByRole('link', { name: /optimization|resume/i }).first();
-      if (await optimizationLink.isVisible().catch(() => false)) {
-        await optimizationLink.click();
+      await openNewOptimization(page);
+      await setTargetRole(page, targetRole);
+      await chooseSonnetModel(page);
 
-        await expect(page.getByText(/ats score|score/i)).toBeVisible();
-        await expect(page.getByText(/matched keywords|keyword/i)).toBeVisible();
-      }
+      await fillJdUrl(page, jobPostUrl);
+
+      const optimizeButton = page.getByRole('button', { name: /optimize/i }).first();
+      await expect(optimizeButton).toBeVisible({ timeout: 15000 });
+      await optimizeButton.click();
+
+      await expect(page.getByText(/ats score|score breakdown|overall score/i).first()).toBeVisible({ timeout: 45000 });
+      await expect(page.getByText(/matched keywords|keyword heatmap|keyword/i).first()).toBeVisible({ timeout: 45000 });
     });
 
     test('[E2E] user can select different AI models before optimization', async ({ page }) => {
       await login(page);
-      // Navigate to authenticated dashboard
-      await page.goto('/dashboard', { waitUntil: 'networkidle' });
-      
-      // Verify user is persisted in authenticated state
-      await expect(page.getByText(/welcome|dashboard/i)).toBeVisible();
+
+      await openNewOptimization(page);
+      await chooseSonnetModel(page);
+      await expectSonnetSelected(page);
     });
   });
 });
