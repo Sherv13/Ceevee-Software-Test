@@ -95,7 +95,9 @@ test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
       await login(page);
       await page.goto('/dashboard');
 
-      await expect(page.getByText(/optimization|resume|dashboard/i)).toBeVisible();
+      // Assert dashboard is loaded by checking the unique welcome message after successful login
+      await expect(page.getByText(/Welcome back/i)).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^dashboard$/i })).toBeVisible();
     });
 
     test('[E2E] can initiate New Optimization and sees JD URL import control', async ({ page }) => {
