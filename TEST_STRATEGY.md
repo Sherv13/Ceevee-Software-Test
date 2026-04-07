@@ -8,11 +8,11 @@ This is the product's core value path: users provide a target role and job descr
 
 ## Scope
 In scope:
+- Entry into New Optimization flow
 - JD URL import controls and behavior
-- Optimization workflow steps
-- Optimization editor outputs (keyword heatmap, diff view, markdown editing)
-- ATS score breakdown categories
-- Export formats and model-tier availability
+- Required field validations before optimize
+- Transition to optimization editor
+- Post-optimization outputs (ATS and keyword surfaces)
 - Re-optimization quota rule (requirements-level assertion)
 
 Out of scope:
@@ -21,7 +21,7 @@ Out of scope:
 - Pro-tier features not required by this core path
 
 ## Test Design
-### Public requirements validation (always runnable)
+### Layer 1: Public requirements validation (always runnable)
 These tests assert that documented requirements are present and explicit on /docs:
 - JD URL Import section and behavior
 - Optimization editor outputs
@@ -33,13 +33,29 @@ These tests assert that documented requirements are present and explicit on /doc
 
 Purpose: keep product intent and critical acceptance criteria visible and testable without credentials.
 
+### Layer 2: Live authenticated E2E (optional)
+These tests require credentials and exercise real product behavior:
+- User login and dashboard access
+- New Optimization form entry
+- Field-level required validation
+- Import from URL and optimize (QA Tester role scenario)
+- ATS score and keyword feedback display
+- AI model selection interface
+
+Purpose: verify real user workflow and UI integrations.
+
 ## Risk Coverage Matrix
-- Functional risk: wrong/missing JD import behavior in documented flow
-- Process risk: optimization workflow steps documented incorrectly
-- Analytics risk: ATS/keyword guidance unclear or missing in docs
-- Output risk: export/model options not documented for users
+- Functional risk: wrong/missing JD import fields
+- Validation risk: optimize allowed with incomplete input
+- Navigation risk: optimize action fails to open editor
+- Analytics risk: ATS/keyword feedback not shown after optimize
 - Business rule risk: re-optimize quota behavior not communicated
+- Authentication risk: login fails or dashboard is inaccessible
+- UI flow risk: New Optimization form is missing required controls
 
 ## Exit Criteria
 - All public requirements tests pass
+- Live E2E tests pass in an environment with valid credentials and sufficient account data
 - No high-severity failures in core optimization path
+- Login and dashboard access verified
+- JD URL import and optimization workflow complete end-to-end

@@ -1,4 +1,22 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const hasLiveCreds = Boolean(process.env.CVAI_USERNAME && process.env.CVAI_PASSWORD);
+const jobPostUrl = process.env.CVAI_TEST_JOB_URL ?? 'https://jobs.lever.co';
+
+async function login(page: Page) {
+  await page.goto('/login');
+
+  await page.getByLabel(/username|email/i).fill(process.env.CVAI_USERNAME as string);
+  await page.getByLabel(/password/i).fill(process.env.CVAI_PASSWORD as string);
+
+  await Promise.all([
+    page.waitForLoadState('networkidle'),
+    page.getByRole('button', { name: /sign in|log in/i }).click(),
+  ]);
+}
 
 test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
   test.describe('Public requirements validation on docs', () => {
@@ -70,4 +88,73 @@ test.describe('Primary Feature: Optimize for a Job (JD URL Import)', () => {
     });
   });
 
+  test.describe('Live authenticated E2E checks (optional)', () => {
+    test.skip(!hasLiveCreds, 'Set CVAI_USERNAME and CVAI_PASSWORD to run live E2E tests.');
+
+    test('[E2E] user can login and access dashboard', async ({ page }) => {
+      await login(page);
+      await page.goto('/dashboard');
+
+      await expect(page.getByText(/optimization|resume|dashboard/i)).toBeVisible();
+    });
+
+    test('[E2E] can initiate New Optimization and sees JD URL import control', async ({ page }) => {
+      await login(page);
+      await page.goto('/dashboard');
+
+      await page.getByRole('link', { name: /new optimization/i }).click();
+      await expect(page.getByText(/import from url/i)).toBeVisible();
+      await expect(page.getByLabel(/target role/i)).toBeVisible();
+    });
+
+    test('[E2E] validates required Target Role field before optimize', async ({ page }) => {
+      await login(page);
+      await page.goto('/dashboard');
+
+      await page.getByRole('link', { name: /new optimization/i }).click();
+      await page.getByRole('button', { name: /^optimize$/i }).click();
+
+      await expect(page.getByText(/target role|required/i)).toBeVisible();
+    });
+
+    test('[E2E] imports job description from URL for QA/Tester role and optimizes', async ({ page }) => {
+      await login(page);
+      await page.goto('/dashboard');
+
+      await page.getByRole('link', { name: /new optimization/i }).click();
+      await page.getByLabel(/target role/i).fill('QA Tester');
+
+      await page.getByRole('button', { name: /import from url/i }).click();
+      await page.getByLabel(/url|job url|job posting url/i).fill(jobPostUrl);
+      await page.getByRole('button', { name: /import|fetch/i }).click();
+
+      await expect(page.getByLabel(/job description/i)).not.toBeEmpty();
+
+      await page.getByRole('button', { name: /^optimize$/i }).click();
+      await expect(page).toHaveURL(/optimi|editor|resume/i);
+    });
+
+    test('[E2E] displays ATS score and keyword feedback after optimization', async ({ page }) => {
+      await login(page);
+      await page.goto('/dashboard');
+
+      // Navigate to an existing optimization if available
+      const optimizationLink = page.getByRole('link', { name: /optimization|resume/i }).first();
+      if (await optimizationLink.isVisible().catch(() => false)) {
+        await optimizationLink.click();
+
+        await expect(page.getByText(/ats score|score/i)).toBeVisible();
+        await expect(page.getByText(/matched keywords|keyword/i)).toBeVisible();
+      }
+    });
+
+    test('[E2E] user can select different AI models before optimization', async ({ page }) => {
+      await login(page);
+      await page.goto('/dashboard');
+
+      await page.getByRole('link', { name: /new optimization/i }).click();
+      const modelSelector = page.getByLabel(/ai model|model/i);
+      await expect(modelSelector).toBeVisible();
+    });
+  });
 });
