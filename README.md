@@ -28,14 +28,8 @@ npm run test:ui
 npm run report
 ```
 
-## Optional Live E2E
-To run authenticated tests, create .env from .env.example and set:
-- CVAI_BASE_URL (default: https://cv-ai.work)
-- CVAI_USERNAME
-- CVAI_PASSWORD
-- CVAI_TEST_JOB_URL
-
-Without credentials, live tests are auto-skipped.
+## Environment (Optional)
+If needed, set `CVAI_BASE_URL` in `.env` (default is `https://cv-ai.work`).
 
 ## PowerShell Note
 If npm.ps1 is blocked, use:
